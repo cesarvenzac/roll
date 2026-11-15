@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.2
+
+- Smoother turns, with nothing shaking. Widths now ease all at once on one curve: staggered like the turns, a word's width grew then shrank, and a centred word wobbled as "Saving" became "Saved". A turning strip moves by `top` rather than a transform, so its letter is drawn in the page as the text beside it is, where a layer of its own put it on whole device pixels and it jumped as it was handed back.
+- Characters that don't turn stay in one text node a run, beside the cells, as plain text lays them out: split a character a node, they stood an eighth of a pixel off and flickered as a turn began and ended.
+
 ## 0.1.1
 
 - A digit now lands exactly where the text draws it. A turning strip was one line of text a step tall, and at some sizes the browser rounded its leading differently from the text's, so a digit settled half a pixel off and moved by that much as it went back to plain text. Each symbol on a strip is now a block a step tall, its line the text's own height.

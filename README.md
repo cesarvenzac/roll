@@ -117,8 +117,9 @@ gives every digit one width, if that's what you want.
 
 About 5 kB minified and gzipped, the React entry included, with no dependencies. At rest a value
 is one text node. Starting a turn takes about 2 ms for a number, 12 ms for twenty changing at
-once and 80 ms for two hundred, measured in headless Chromium on one core of a 2.1 GHz server;
-the turn itself plays on the compositor (a transform), apart from the width.
+once and 80 ms for two hundred, measured in headless Chromium on one core of a 2.1 GHz server.
+A turn moves its strip by `top`, not a transform: on a layer of its own a letter was placed on whole
+device pixels and stood apart from the text beside it, so it's drawn in the page as that text is.
 
 ## Browsers
 

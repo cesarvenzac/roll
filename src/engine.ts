@@ -71,9 +71,12 @@ const WINDOW = `position:absolute;top:-${FADE}em;bottom:-${FADE}em;left:-${SIDE}
 /**
  * A strip: a block a symbol, each a step tall, its symbol on a line of the text's own height at its
  * top, so it's drawn where the text draws it to the pixel, however the browser rounds a line's
- * leading (one line of text a step tall would put it half a pixel off at some sizes).
+ * leading (one line of text a step tall would put it half a pixel off at some sizes). It's as wide
+ * as the window, past the cell on both sides: a letter a hair wider than its cell, as the browser
+ * rounds a cell's width, overflowed a strip as wide as the cell and was set from its left, a
+ * sixty-fourth of a pixel off centre and off the text.
  */
-const STRIP = `position:absolute;top:${FADE}em;left:${SIDE}em;right:${SIDE}em;text-align:center`;
+const STRIP = `position:absolute;top:${FADE}em;left:0;right:0;text-align:center`;
 /** Measures the next symbol beside the one shown, taking no room. */
 const MEASURER = "position:absolute;top:0;left:0;visibility:hidden;white-space:pre";
 const RULER = "position:absolute;top:0;left:0;width:0;height:0;overflow:hidden;visibility:hidden";
@@ -83,9 +86,10 @@ type Motion = { animation: Animation; from: number; to: number; velocity: number
 type CellState = Cell & {
   /** On its way out. */
   gone: boolean;
-  /** What stands in the line: plain text while it has never turned, its cell once it does. */
-  node: Text | HTMLSpanElement;
-  /** Its cell, once it turns. */
+  /**
+   * Its cell, once it turns. Until then it's drawn in a run of plain text with its neighbours that
+   * don't turn either (`layOut`).
+   */
   element: HTMLSpanElement | null;
   /** The symbol in the cell: what it shows at rest, and what holds its place (unseen) while it turns. */
   sizer: HTMLSpanElement | null;
@@ -237,26 +241,68 @@ export class Engine {
     for (const id of this.nodes.keys()) if (id !== this.shown && id !== this.next) this.nodes.delete(id);
   }
 
-  /** A character as plain text, as it stands in a value at rest. */
+  /** A character as plain text, as it stands in a value at rest (a node is a cell from the start). */
   private plain(cell: Cell): CellState {
-    const node = document.createTextNode(cell.symbol.startsWith(NODE) ? "" : cell.symbol);
-    const state: CellState = { ...cell, gone: false, node, element: null, sizer: null, window: null, strip: null, measurer: null, symbols: [cell.symbol], symbol: cell.symbol, next: null, turn: null, widen: null, width: NaN, target: 0 };
+    const state: CellState = { ...cell, gone: false, element: null, sizer: null, window: null, strip: null, measurer: null, symbols: [cell.symbol], symbol: cell.symbol, next: null, turn: null, widen: null, width: NaN, target: 0 };
     if (cell.symbol.startsWith(NODE)) this.cellOf(state);
     return state;
   }
 
-  /** A character's cell, made in its place the first time it turns: its width to be measured. */
+  /** A character's cell, made the first time it turns (`layOut` puts it in its place): its width to be measured. */
   private cellOf(cell: CellState) {
     if (cell.element) return cell.element;
     const element = span(CELL);
     const sizer = document.createElement("span");
     this.fill(sizer, cell.symbol);
     element.append(sizer);
-    cell.node.parentNode?.replaceChild(element, cell.node);
-    cell.node = cell.element = element;
+    cell.element = element;
     cell.sizer = sizer;
     cell.width = NaN;
     return element;
+  }
+
+  /**
+   * The line as it should stand: each run of characters that don't turn as one text node, each
+   * cell in its place, the ruler last. A run split into a node a character is placed by the browser
+   * an eighth of a pixel off plain text, which showed as a flicker as a turn began and ended; one
+   * node a run, and cells beside it, lay out exactly as plain text. Cells already in the line are
+   * never moved: only the text between them is written.
+   */
+  private layOut() {
+    const parts: (string | HTMLSpanElement)[] = [];
+    let run = "";
+    for (const cell of this.order) {
+      if (!cell.element) run += cell.symbol;
+      else {
+        if (run) parts.push(run);
+        run = "";
+        parts.push(cell.element);
+      }
+    }
+    if (run) parts.push(run);
+    if (this.ruler) parts.push(this.ruler);
+    const kept = new Set<Node>(parts.filter((part) => typeof part !== "string"));
+    let at: ChildNode | null = this.visual.firstChild;
+    const drop = () => {
+      const next: ChildNode | null = at!.nextSibling;
+      at!.remove();
+      at = next;
+    };
+    for (const part of parts) {
+      if (typeof part === "string") {
+        while (at && at.nodeType !== Node.TEXT_NODE && !kept.has(at)) drop();
+        if (at && at.nodeType === Node.TEXT_NODE) {
+          if ((at as Text).data !== part) (at as Text).data = part;
+          at = at.nextSibling;
+        } else this.visual.insertBefore(document.createTextNode(part), at);
+      } else {
+        // What stands before it isn't there any more: text, or what the line held at rest.
+        while (at && at !== part && (at.nodeType === Node.TEXT_NODE || !kept.has(at))) drop();
+        if (at === part) at = at.nextSibling;
+        else this.visual.insertBefore(part, at);
+      }
+    }
+    while (at) drop();
   }
 
   /**
@@ -275,7 +321,6 @@ export class Engine {
       });
       this.ruler = span(RULER);
       this.ruler.append(span("display:inline-block;width:10em"));
-      this.visual.replaceChildren(...this.order.map((cell) => cell.node), this.ruler);
     }
     const before = this.shown;
     const after = this.next;
@@ -297,8 +342,6 @@ export class Engine {
         cell.symbol = BLANK;
         cell.width = 0;
         cells.set(change.key, cell);
-        const following = this.order.slice(at).find((other) => other.node.parentNode === this.visual);
-        this.visual.insertBefore(element, following?.node ?? this.ruler);
         this.order.splice(at, 0, cell);
       } else if (next !== cell.symbol) {
         const element = this.cellOf(cell);
@@ -313,6 +356,7 @@ export class Engine {
       cell.gone = change.gone;
       cell.next = next !== cell.symbol ? next : null;
     }
+    this.layOut();
     this.shown = after;
     return true;
   }
@@ -326,7 +370,10 @@ export class Engine {
     if (lined) this.line = lined.element!.getBoundingClientRect().height / em;
     for (const cell of this.order) {
       if (!cell.sizer) continue;
-      if (Number.isNaN(cell.width) && !cell.turn && !cell.widen) cell.width = cell.sizer.getBoundingClientRect().width / em;
+      // The cell's own width, as the browser lays it out (rounded to its grid), not the letter's
+      // advance: a turn starting from the advance stood a sixty-fourth of a pixel off, enough to
+      // draw the letter a step of the sub-pixel grid away from the plain text it took over from.
+      if (Number.isNaN(cell.width) && !cell.turn && !cell.widen) cell.width = (cell.element ?? cell.sizer).getBoundingClientRect().width / em;
       if (cell.next === null) continue;
       cell.target = cell.next === BLANK ? 0 : (cell.measurer ?? cell.sizer).getBoundingClientRect().width / em;
     }
@@ -359,7 +406,9 @@ export class Engine {
       const moving = !!(cell.turn || cell.widen);
       const delay = moving ? 0 : resting++ * stagger;
       this.turn(cell, spring, reels, delay);
-      this.widen(cell, width, spring, delay);
+      // Widths all at once, on one curve: the value's width then moves one way only, where widths
+      // staggered as the turns are made it grow then shrink, and a centred word shook.
+      this.widen(cell, width, spring, 0);
       cell.element!.style.width = "";
     }
     this.settle();
@@ -392,7 +441,10 @@ export class Engine {
     cell.symbols = turn.symbols;
     const velocity = now.velocity + pushOf(spring, turn.from, turn.to);
     const frames = springFrames(spring, turn.from, turn.to, velocity, WITHIN);
-    const animation = play(cell.strip!, frames, (value) => ({ transform: `translateY(${(-value * step).toFixed(4)}em)` }), delay);
+    // Moved by `top`, drawn in the page as the text beside it is: a transform put the strip on a
+    // layer of its own, which the browser places on whole device pixels, so a letter turning stood
+    // up to a pixel off the text and jumped as it was handed back.
+    const animation = play(cell.strip!, frames, (value) => ({ top: `${(FADE - value * step).toFixed(4)}em` }), delay);
     const motion: Motion = { animation, from: turn.from, to: turn.to, velocity, delay, spring, ended: false };
     cell.turn = motion;
     animation.onfinish = () => {
@@ -406,7 +458,7 @@ export class Engine {
     cell.widen?.animation.cancel();
     const velocity = now.velocity + pushOf(spring, now.value, cell.width);
     const frames = springFrames(spring, now.value, cell.width, velocity, WITHIN);
-    const animation = play(cell.element!, frames, (value) => ({ width: `${Math.max(0, value).toFixed(4)}em` }), delay);
+    const animation = play(cell.element!, frames, (value) => ({ width: `${Math.max(0, value).toFixed(6)}em` }), delay);
     const motion: Motion = { animation, from: now.value, to: cell.width, velocity, delay, spring, ended: false };
     cell.widen = motion;
     animation.onfinish = () => {
@@ -445,9 +497,9 @@ export class Engine {
     cell.widen?.animation.cancel();
     cell.turn = cell.widen = null;
     if (cell.gone) {
-      cell.node.remove();
       this.cells?.delete(cell.key);
       this.order = this.order.filter((other) => other !== cell);
+      this.layOut();
     } else {
       cell.window?.remove();
       cell.window = cell.strip = null;
