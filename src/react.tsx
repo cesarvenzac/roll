@@ -16,7 +16,7 @@
 
 import { createContext, type CSSProperties, type HTMLAttributes, type ReactElement, type ReactNode, useContext, useEffect, useLayoutEffect, useRef, useState } from "react";
 
-import { Driver, type DriverOptions, shownOf } from "./driver.ts";
+import { Driver, type DriverOptions, shownOf, tabularOf } from "./driver.ts";
 import { Group, SPOKEN, type Value, VISUAL } from "./engine.ts";
 
 const useIsomorphicLayoutEffect = typeof window === "undefined" ? useEffect : useLayoutEffect;
@@ -33,6 +33,8 @@ const SPOKEN_STYLE = styleOf(SPOKEN);
 /** Set as the visual is, so what a server drew doesn't move as it's taken up. */
 const ROOT_STYLE: CSSProperties = { position: "relative", whiteSpace: "nowrap", fontKerning: "none", fontVariantLigatures: "none" };
 const HIDDEN: CSSProperties = { display: "none" };
+/** As the driver draws them while it counts, so a server's figures are the browser's. */
+const TABULAR_STYLE: CSSProperties = { ...VISUAL_STYLE, fontVariantNumeric: "tabular-nums" };
 
 const escape = (text: string) => text.replace(/[&<>"']/g, (character) => `&#${character.charCodeAt(0)};`);
 
@@ -77,6 +79,7 @@ export function Roll({
   trend,
   count,
   format,
+  tabular,
   onSettle,
   style,
   ...props
@@ -90,9 +93,10 @@ export function Roll({
   // What the server drew stays the visual's: React never writes into it again, the engine does.
   const [drawn] = useState(() => ({ __html: text === null ? "" : escape(text) }));
   const [mounted, setMounted] = useState(false);
+  const figures = tabularOf({ tabular, count }) ? TABULAR_STYLE : VISUAL_STYLE;
 
   useIsomorphicLayoutEffect(() => {
-    options.current = { duration, bounce, stagger, staggerFrom, reels, way, reducedMotion, look, direction, effects, trend, count, format, onSettle, group: group ?? undefined };
+    options.current = { duration, bounce, stagger, staggerFrom, reels, way, reducedMotion, look, direction, effects, trend, count, format, tabular, onSettle, group: group ?? undefined };
     const next: Value | null = typeof value === "number" ? value : (text ?? source.current?.firstElementChild ?? source.current?.firstChild ?? null);
     if (!engine.current) {
       engine.current = new Driver(visual.current!, next ?? "", () => options.current);
@@ -109,12 +113,12 @@ export function Roll({
 
   return (
     <span {...props} style={{ ...ROOT_STYLE, ...style }}>
-      <span ref={visual} aria-hidden="true" style={VISUAL_STYLE} dangerouslySetInnerHTML={drawn} />
+      <span ref={visual} aria-hidden="true" style={figures} dangerouslySetInnerHTML={drawn} />
       {text === null && (
         // The element as React renders it: shown until the engine draws its copy, then its source.
         // Set as the visual is, so it lays out as the copy will: in a plain span, an icon the page
         // makes a block (Tailwind's SVGs) broke out of its line and stood taller until hydration.
-        <span ref={source} aria-hidden="true" style={mounted ? HIDDEN : VISUAL_STYLE}>
+        <span ref={source} aria-hidden="true" style={mounted ? HIDDEN : figures}>
           {value}
         </span>
       )}

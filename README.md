@@ -106,8 +106,10 @@ from one sprung value (CSS's `sin()`, `cos()` and `round()`), so it's as smooth 
 
 - **`count`** walks a number given as a number through every value between the last and the
   next, on a spring of its own (about a second, or the seconds you give), each number rounded as
-  the two ends are written before `format` writes it, and rolled. Sent somewhere new mid-count, it
-  goes on at the speed it has.
+  the one it's going to is written before `format` writes it, and rolled: 6.67 to 8 drops its
+  decimals at once and lands on 8, 8 to 6.67 shows them at once. Its digits are tabular figures
+  while it counts, so the value holds its width. Sent somewhere new mid-count, it goes on at the
+  speed it has.
 - **`trend`** tints the value a moment as its numbers go up or down, green or red (darkened to
   read on white), then lets it fade back to its own colour: `trend={{ up: "…", down: "…" }}` for
   colours of your own. A change whose numbers didn't move isn't tinted.
@@ -170,7 +172,7 @@ dependency; it's a client component. `<RollGroup onSettle?>` groups every `Roll`
 ### `<roll-text>`
 
 `@cesarvenzac/roll/element` defines it when imported. Its options are attributes (`look`,
-`direction`, `effects="fade blur"`, `stagger-from`, `trend`, `count`, `duration`, `bounce`,
+`direction`, `effects="fade blur"`, `stagger-from`, `trend`, `count`, `tabular`, `duration`, `bounce`,
 `stagger`, `way`, `reels`, `reduced-motion`, `label`), its value an attribute or the `value`
 property (a number counts), and `options` a property for what an attribute can't say (`format`,
 `group`, `onSettle`). Its `settled` is the roller's. Text written inside it before it's defined (a
@@ -199,6 +201,7 @@ directive an element with nothing inside for Vue to keep.
 | `trend`         | `false`            | Tints the value green going up and red going down, then lets it fade back.    |
 | `count`         | `false`            | Counts a number through every value between: `true`, or the seconds to take.  |
 | `format`        | `String`           | How a number given as a number is written.                                    |
+| `tabular`       | while counting     | Tabular figures, every digit one width: on with `count`, else the font's own. |
 | `onSettle`      |                    | Called each time it comes to rest on a new value.                             |
 | `group`         |                    | A `rollGroup()` it moves with.                                                |
 | `label`         | the value's words  | What assistive tech reads. A node's `aria-label` unless said.                 |
@@ -212,8 +215,11 @@ is never more than a quarter of a second from the first character to the last.
 
 It's text: set its font, size, colour and line height on the element, and they hold while it
 rolls. Kerning and ligatures are off inside it, so a character is as wide alone as among the
-others and nothing shifts as it turns into cells and back. `font-variant-numeric: tabular-nums`
-gives every digit one width, if that's what you want.
+others and nothing shifts as it turns into cells and back. A value that counts draws tabular
+figures, every digit one width, so it holds its width while its digits change every frame; any
+other keeps the font's own figures, whose widths Roll eases as they change. `tabular` says
+otherwise either way: tabular figures suit any number that changes while it's watched (a price, a
+clock, a column of numbers), the font's own a large figure that changes now and then.
 
 ## Cost
 

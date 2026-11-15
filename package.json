@@ -1,6 +1,6 @@
 {
   "name": "@cesarvenzac/roll",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Text that rolls as it changes: digits turn like an odometer's and keep their places, letters and icons roll over, on springs that carry on when interrupted. No dependencies.",
   "keywords": [
     "roll",

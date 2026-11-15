@@ -15,7 +15,16 @@ export type DriverOptions = Options & {
   count?: boolean | number;
   /** How a number given as a number is written: `toLocaleString`, a currency. As JavaScript writes it unless said. */
   format?: (value: number) => string;
+  /**
+   * Draws digits in tabular figures, each as wide as the next, so a value holds its width while it
+   * changes: on while it counts, where its digits change every frame, unless said; off otherwise,
+   * the font's own figures.
+   */
+  tabular?: boolean;
 };
+
+/** Whether a roller draws tabular figures: as said, else while it counts. */
+export const tabularOf = (options: DriverOptions) => options.tabular ?? !!options.count;
 
 /** A value as the engine takes it: a number written by `format`, anything else as it is. */
 export function shownOf(value: Value, format?: (value: number) => string): Value {
@@ -33,6 +42,7 @@ export class Driver {
     private readonly options: () => DriverOptions,
   ) {
     this.last = value;
+    this.figures(visual, options());
     // The engine says it's at rest only when the count is too: a count slowing to its end can hold one
     // number for a few frames, and the engine would rest between them.
     this.engine = new Engine(visual, shownOf(value, options().format), () => ({ ...this.options(), onSettle: () => this.rested() }));
@@ -42,15 +52,23 @@ export class Driver {
     return (this.counter?.idle() ?? Promise.resolve()).then(() => this.engine.settled);
   }
 
+  /** Tabular figures, or the font's own, on what's drawn (inherited by every cell and strip in it). */
+  private figures(visual: HTMLElement, options: DriverOptions) {
+    const tabular = tabularOf(options) ? "tabular-nums" : "";
+    if (visual.style.fontVariantNumeric !== tabular) visual.style.fontVariantNumeric = tabular;
+  }
+
   set(value: Value) {
     const options = this.options();
+    this.figures(this.engine.visual, options);
     const before = this.last;
     this.last = value;
     if (typeof value === "number" && typeof before === "number" && options.count) {
       const seconds = typeof options.count === "number" ? options.count : COUNT_SECONDS;
-      // Every number on the way rounded as finely as the two ends are written, before it's formatted:
-      // a format of the visitor's own (`toLocaleString`) would otherwise write 1,039.233.
-      const decimals = Math.max(decimalsOf(before), decimalsOf(value));
+      // Every number on the way rounded as the one it's going to is written, before it's formatted: a
+      // format of the visitor's own (`toLocaleString`) would otherwise write 1,039.233, and 6.67 to 8
+      // dropped its decimals only as it landed, plain numbers landing on "8.00".
+      const decimals = decimalsOf(value);
       const written = options.format ?? plainFormat(decimals);
       const format = (n: number) => written(roundTo(n, decimals));
       const still = options.reducedMotion ?? prefersReducedMotion();

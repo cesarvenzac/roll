@@ -11,7 +11,7 @@ import { roll as rollAction, type RollParams } from "@cesarvenzac/roll/svelte";
 import { type RollBinding, vRoll } from "@cesarvenzac/roll/vue";
 
 const way: Way | "auto" = "auto";
-const options: RollOptions = { duration: 0.5, bounce: 0.1, stagger: 0.02, reels: [DIGITS, LOWERCASE, UPPERCASE], way, reducedMotion: false, look: "drum" satisfies Look, direction: "right" satisfies Direction, effects: ["fade", "blur", "motion"] satisfies Effect[], staggerFrom: "center" satisfies StaggerFrom, trend: { up: "green" }, count: 0.8, format: (n) => n.toFixed(2), onSettle: () => {}, label: "Price" };
+const options: RollOptions = { duration: 0.5, bounce: 0.1, stagger: 0.02, reels: [DIGITS, LOWERCASE, UPPERCASE], way, reducedMotion: false, look: "drum" satisfies Look, direction: "right" satisfies Direction, effects: ["fade", "blur", "motion"] satisfies Effect[], staggerFrom: "center" satisfies StaggerFrom, trend: { up: "green" }, count: 0.8, tabular: true, format: (n) => n.toFixed(2), onSettle: () => {}, label: "Price" };
 const group: Group = rollGroup({ onSettle: () => {} });
 export const start = (element: HTMLElement, value: Value): Roller => {
   const price = roll(element, value, options);

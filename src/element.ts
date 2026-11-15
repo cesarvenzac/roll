@@ -7,15 +7,15 @@
  *   document.querySelector("roll-text").value = "€6.67";
  *
  * Its options are attributes (`look`, `direction`, `effects="fade blur"`, `stagger-from`, `trend`,
- * `count`, `duration`…); `value` is an attribute or a property (a number counts with `count`), and
- * `options` a property for what an attribute can't say (`format`, `group`, `onSettle`). Text written
- * inside it before it's defined (a server's) is taken up as it is.
+ * `count`, `tabular`, `duration`…); `value` is an attribute or a property (a number counts with
+ * `count`), and `options` a property for what an attribute can't say (`format`, `group`,
+ * `onSettle`). Text written inside it before it's defined (a server's) is taken up as it is.
  */
 
 import { roll, type Roller, type RollOptions, type Value } from "./index.ts";
 
 /** The attributes it reads, as options. */
-const ATTRIBUTES = ["value", "label", "look", "direction", "effects", "duration", "bounce", "stagger", "stagger-from", "way", "trend", "count", "reduced-motion", "reels"];
+const ATTRIBUTES = ["value", "label", "look", "direction", "effects", "duration", "bounce", "stagger", "stagger-from", "way", "trend", "count", "tabular", "reduced-motion", "reels"];
 
 const numberOf = (text: string | null) => (text === null || text.trim() === "" || Number.isNaN(Number(text)) ? undefined : Number(text));
 /** A switch: there and not "false". */
@@ -40,6 +40,7 @@ export function optionsOf(element: Element): RollOptions {
     trend: on(element, "trend") || undefined,
     count: count === undefined ? undefined : (numberOf(count) ?? on(element, "count")),
     reducedMotion: element.hasAttribute("reduced-motion") ? on(element, "reduced-motion") : undefined,
+    tabular: element.hasAttribute("tabular") ? on(element, "tabular") : undefined,
   };
 }
 

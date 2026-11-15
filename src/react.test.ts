@@ -21,6 +21,15 @@ describe("Roll on a server", () => {
     expect(markup).toContain("&#60;b&#62;&#34;1&#34; &#38; 2&#60;/b&#62;");
   });
 
+  it("draws tabular figures while it counts, as the browser will, unless told otherwise", () => {
+    const tabular = `font-variant-ligatures:none;font-variant-numeric:tabular-nums">1,284</span>`;
+    const format = (n: number) => n.toLocaleString("en");
+    expect(render({ value: 1284, count: true, format })).toContain(tabular);
+    expect(render({ value: 1284, tabular: true, format })).toContain(tabular);
+    expect(render({ value: 1284, count: true, tabular: false, format })).not.toContain("tabular-nums");
+    expect(render({ value: 1284, format })).not.toContain("tabular-nums");
+  });
+
   it("keeps its own props, and the style given over its own", () => {
     const markup = render({ value: "3", className: "price", id: "p", style: { color: "red" } });
     expect(markup).toMatch(/^<span class="price" id="p" style="position:relative;white-space:nowrap;font-kerning:none;font-variant-ligatures:none;color:red">/);

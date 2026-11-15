@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.1.0
+
+- A count goes as the number it's going to is written. Each number on the way is rounded to the target's decimals before it's formatted, so 6.67 to 8 drops its decimals at once and lands on 8, where it rolled ".00" until the end and landed, unformatted, on "8.00"; 8 to 6.67 shows them at once.
+- Tabular figures while counting. A roller with `count` draws its digits in tabular figures, every digit one width, so the value holds its width while its digits change every frame; React draws them on the server too. `tabular` says otherwise, or asks for them without counting; `<roll-text>` takes it as an attribute.
+
 ## 1.0.0
 
 - Looks and directions. `look` turns a symbol on a slot machine's drum or a turning cube, seen in perspective, rolls it along like a wheel (`circle`), tips it over its edge (`square`) or swaps it in place (`swap`, a crossfade); `slide`, the flat strip, stays the default. `direction` sends it `up` (the default), `down`, `left` or `right` as the value turns forward, and counting down runs it the other way. Going across, what leaves stays inside its own cell.
