@@ -1,6 +1,6 @@
 {
   "name": "@cesarvenzac/roll",
-  "version": "0.1.3",
+  "version": "1.0.0",
   "description": "Text that rolls as it changes: digits turn like an odometer's and keep their places, letters and icons roll over, on springs that carry on when interrupted. No dependencies.",
   "keywords": [
     "roll",
@@ -17,7 +17,10 @@
     "text-animation",
     "spring",
     "animation",
-    "react"
+    "react",
+    "vue",
+    "svelte",
+    "web-component"
   ],
   "homepage": "https://cesarvenzac.com/roll",
   "repository": {
@@ -28,7 +31,10 @@
   "author": "César Venzac (https://cesarvenzac.com)",
   "license": "MIT",
   "type": "module",
-  "sideEffects": false,
+  "sideEffects": [
+    "./dist/element.js",
+    "./src/element.ts"
+  ],
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
@@ -37,6 +43,18 @@
     "./react": {
       "types": "./dist/react.d.ts",
       "default": "./dist/react.js"
+    },
+    "./element": {
+      "types": "./dist/element.d.ts",
+      "default": "./dist/element.js"
+    },
+    "./svelte": {
+      "types": "./dist/svelte.d.ts",
+      "default": "./dist/svelte.js"
+    },
+    "./vue": {
+      "types": "./dist/vue.d.ts",
+      "default": "./dist/vue.js"
     },
     "./package.json": "./package.json"
   },

@@ -1,14 +1,16 @@
 /**
  * Draws a rolling value into an element: plain text while it rests (one text node, as cheap and
  * as crisp as any text), and a cell a character only while something rolls. A cell rolls on a
- * strip, its symbols top to bottom, moved by a transform on a spring, its width easing to the next
+ * strip, its symbols top to bottom, moved on a spring (or posed by a look), its width easing to the next
  * symbol's on the same spring; a turn told to go elsewhere mid-way goes on at the speed it has.
  * Every roller on the page changes together, once a change: all write, all read (one layout for
  * the lot), all animate, so a table of numbers changing at once lays out once, not once a number.
  */
 
-import { between, type Cell, cellsOf, graphemesOf, type Way, wayOf } from "./cells.ts";
-import { pushOf, type Spring, springAt, springFrames } from "./spring.ts";
+import { between, type Cell, cellsOf, graphemesOf, trendOf, type Way, wayOf } from "./cells.ts";
+import { cssOf, type Direction, type Effect, isDeep, type Look, poseOf, SPEED } from "./looks.ts";
+import { pushOf, RATE, type Spring, springAt, springFrames } from "./spring.ts";
+import { ranksOf, type StaggerFrom, stepOf } from "./stagger.ts";
 import { BLANK, turnOf } from "./turn.ts";
 
 /** What a roller shows: text, a number, or a node (an icon, say) that rolls over as one. */
@@ -23,15 +25,44 @@ export type Options = {
   stagger?: number;
   /**
    * What turns through its symbols rather than rolling over: each string a reel of symbols in
-   * order, going round. A number's digits turn the way the number went; any other symbol the
-   * shorter way round. Digits alone unless said.
+   * order, going round. Everything turns the value's way, as a split-flap board's flaps do: a
+   * number's digits the way the number went, anything else forward. Digits alone unless said.
    */
   reels?: readonly string[];
   /** Which way everything turns: `auto` (the default) reads it from the value's numbers. */
   way?: Way | "auto";
   /** Whether to fade rather than move: `prefers-reduced-motion` unless said. */
   reducedMotion?: boolean;
+  /**
+   * How a symbol turns: `slide` (the default) on a flat strip, `drum` on a turning drum and
+   * `cube` on a turning box, seen in perspective, `circle` rolling like a wheel and `square`
+   * tipping over its edge.
+   */
+  look?: Look;
+  /** Where a symbol goes as the value turns forward: `up` (the default), `down`, `left` or `right`. */
+  direction?: Direction;
+  /**
+   * Laid over the look as a symbol leaves and comes, as far as it's gone: `fade`, `scale` (down,
+   * never to nothing) and `blur`, any of them together. None unless said.
+   */
+  effects?: readonly Effect[];
+  /** Where a change's characters start from: the `start` (the default), the `end` or the `center`. */
+  staggerFrom?: StaggerFrom;
+  /**
+   * Tints the value a moment as its numbers go up or down, then lets it fade back to its own colour,
+   * as a ticker does: `true` for green and red, or the colours to use.
+   */
+  trend?: boolean | { up?: string; down?: string };
+  /** Called each time it comes to rest on a new value. */
+  onSettle?: () => void;
+  /** Rollers in a group stagger as one value, in the page's order, and settle together. */
+  group?: Group;
 };
+
+/** Green and red a ticker's, darkened to read on white (4.5:1 and more). */
+const TREND = { up: "#15803d", down: "#dc2626" };
+/** Seconds a trend's tint holds and fades. */
+const TREND_SECONDS = 1.1;
 
 export const DIGITS = "0123456789";
 
@@ -63,8 +94,6 @@ const SIDE = 0.5;
 const WITHIN = 0.002;
 /** Seconds a fade takes under reduced motion. */
 const FADE_SECONDS = 0.18;
-/** The longest the stagger may hold the last character back, in seconds. */
-const STAGGER_MOST = 0.24;
 
 const CELL = "display:inline-block;position:relative;white-space:pre";
 const WINDOW = `position:absolute;top:-${FADE}em;bottom:-${FADE}em;left:-${SIDE}em;right:-${SIDE}em;overflow:hidden;pointer-events:none;mask-image:linear-gradient(transparent,#000 ${FADE}em,#000 calc(100% - ${FADE}em),transparent);-webkit-mask-image:linear-gradient(transparent,#000 ${FADE}em,#000 calc(100% - ${FADE}em),transparent)`;
@@ -77,11 +106,26 @@ const WINDOW = `position:absolute;top:-${FADE}em;bottom:-${FADE}em;left:-${SIDE}
  * sixty-fourth of a pixel off centre and off the text.
  */
 const STRIP = `position:absolute;top:${FADE}em;left:0;right:0;text-align:center`;
+/**
+ * A window for a look that turns across: as tall as a square tipping or a circle turning needs,
+ * as wide as its cell and a fade, so what leaves never passes over its neighbours.
+ */
+const ACROSS = `position:absolute;top:-${2 * FADE}em;bottom:-${2 * FADE}em;left:-${FADE}em;right:-${FADE}em;overflow:hidden;pointer-events:none;mask-image:linear-gradient(to right,transparent,#000 ${FADE}em,#000 calc(100% - ${FADE}em),transparent);-webkit-mask-image:linear-gradient(to right,transparent,#000 ${FADE}em,#000 calc(100% - ${FADE}em),transparent)`;
+/** A symbol in a look, placed as a strip's is at rest, moved by its pose. */
+const POSED = "position:absolute;left:0;right:0;display:flex;justify-content:center;align-items:flex-start;white-space:pre";
+/** How far a deep look's eye is, in steps: near enough to see the depth, far enough not to warp. */
+const EYE = 4;
 /** Measures the next symbol beside the one shown, taking no room. */
 const MEASURER = "position:absolute;top:0;left:0;visibility:hidden;white-space:pre";
 const RULER = "position:absolute;top:0;left:0;width:0;height:0;overflow:hidden;visibility:hidden";
 
-type Motion = { animation: Animation; from: number; to: number; velocity: number; delay: number; spring: Spring; ended: boolean };
+type Motion = { animation: Animation; from: number; to: number; velocity: number; delay: number; spring: Spring; ended: boolean; also?: Animation };
+
+/** Stops a motion, and what plays beside it. */
+function stop(motion: Motion | null) {
+  motion?.animation.cancel();
+  motion?.also?.cancel();
+}
 
 type CellState = Cell & {
   /** On its way out. */
@@ -95,6 +139,9 @@ type CellState = Cell & {
   sizer: HTMLSpanElement | null;
   window: HTMLSpanElement | null;
   strip: HTMLSpanElement | null;
+  /** The look its window is made for, and how far apart its symbols are going across (em). */
+  kind: string | null;
+  across: number;
   /** The next symbol, measured. */
   measurer: HTMLSpanElement | null;
   /** The strip's symbols while it turns; the one it shows when still. */
@@ -111,7 +158,30 @@ type CellState = Cell & {
   target: number;
 };
 
-const prefersReducedMotion = () => typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches;
+/** The value a look's symbols are posed from, sprung on the window and read by each symbol. */
+const VALUE = "--roll-v";
+let posing: boolean | undefined;
+/**
+ * Whether the browser can pose symbols from one sprung value: a registered property to animate, and
+ * CSS's sine, cosine and rounding to work their poses out. Elsewhere every look slides up.
+ */
+function posesWork() {
+  if (posing !== undefined) return posing;
+  posing = false;
+  if (typeof CSS === "undefined" || typeof CSS.registerProperty !== "function" || typeof CSS.supports !== "function") return false;
+  if (!CSS.supports("transform", "rotate(calc(sin(30deg) * 1rad))") || !CSS.supports("width", "calc(round(down, 1.5, 1) * 1px)")) return false;
+  for (const name of [VALUE, SPEED]) {
+    try {
+      CSS.registerProperty({ name, syntax: "<number>", inherits: true, initialValue: "0" });
+    } catch {
+      // Registered already, by another copy of Roll on the page: the same property.
+    }
+  }
+  return (posing = true);
+}
+
+/** Whether the visitor asked for less motion. */
+export const prefersReducedMotion = () => typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches;
 
 /** Where a motion is and how fast it's going, now. */
 function where(motion: Motion) {
@@ -161,7 +231,45 @@ function flush() {
   // Every roller writes, then every one reads, then every one animates: one layout for them all.
   const work = engines.filter((engine) => engine.begin());
   for (const engine of work) engine.read();
-  for (const engine of work) engine.animate();
+  // A group's rollers stagger as one value, in the page's order: each its slice of the ranks.
+  const alone = work.filter((engine) => !engine.group);
+  for (const engine of alone) engine.animate();
+  const groups = new Set(work.map((engine) => engine.group).filter((group): group is Group => !!group));
+  for (const group of groups) {
+    const members = work
+      .filter((engine) => engine.group === group)
+      .sort((a, b) => (a.visual.compareDocumentPosition(b.visual) & Node.DOCUMENT_POSITION_FOLLOWING ? -1 : 1));
+    const counts = members.map((engine) => engine.fresh());
+    const options = members[0].options();
+    const ranks = ranksOf(counts.reduce((sum, n) => sum + n, 0), options.staggerFrom ?? "start");
+    const step = stepOf(options.stagger ?? 0.03, ranks);
+    let at = 0;
+    members.forEach((engine, k) => {
+      engine.animate(ranks.slice(at, at + counts[k]), step);
+      at += counts[k];
+    });
+  }
+}
+
+/**
+ * Rollers that move as one: a change to several in the same moment staggers across them all, in
+ * the page's order, and `settled` waits for every one of them.
+ */
+export class Group {
+  readonly members = new Set<Engine>();
+  constructor(private onSettle?: () => void) {}
+  /** What's called each time all its rollers have come to rest, from now on. */
+  listen(onSettle: (() => void) | undefined) {
+    this.onSettle = onSettle;
+  }
+  /** Resolves once every roller in it is at rest. */
+  get settled(): Promise<void> {
+    return Promise.all([...this.members].map((engine) => engine.settled)).then(() => undefined);
+  }
+  /** One of its rollers came to rest: if all have, it has. */
+  rested() {
+    if ([...this.members].every((engine) => engine.resting)) this.onSettle?.();
+  }
 }
 
 export class Engine {
@@ -174,16 +282,35 @@ export class Engine {
   private em = 0;
   private line = 0;
   private way: Way = "up";
+  /** Which way this change's numbers went, for `trend`. */
+  private trend: Way | null = null;
+  private tint: Animation | null = null;
   private destroyed = false;
+  /** Waiting for it to come to rest. */
+  private waiting: (() => void)[] = [];
+  readonly group: Group | null;
 
   constructor(
     readonly visual: HTMLElement,
     value: Value,
-    private options: () => Options,
+    readonly options: () => Options,
   ) {
     this.shown = this.next = this.idOf(value);
+    this.group = options().group ?? null;
+    this.group?.members.add(this);
     // A server may have drawn it already; otherwise it's drawn at rest.
     if (this.shown.startsWith(NODE) || visual.textContent !== this.shown || visual.children.length) this.rest();
+  }
+
+  /** Whether it's at rest: nothing turning, nothing waiting to. */
+  get resting() {
+    return this.destroyed || (!this.cells && !queue.has(this) && this.shown === this.next);
+  }
+
+  /** Resolves once it's at rest on the value it was last given. */
+  get settled(): Promise<void> {
+    if (this.resting) return Promise.resolve();
+    return new Promise((resolve) => this.waiting.push(resolve));
   }
 
   /** The text it shows, or a node's markup. */
@@ -204,11 +331,24 @@ export class Engine {
     this.destroyed = true;
     queue.delete(this);
     for (const cell of this.order) {
-      cell.turn?.animation.cancel();
+      stop(cell.turn);
       cell.widen?.animation.cancel();
     }
+    this.tint?.cancel();
     this.shown = this.next;
     this.rest();
+    this.group?.members.delete(this);
+    this.ended(false);
+  }
+
+  /** At rest: whoever waited is told, and its group asked whether it's at rest too. */
+  private ended(said: boolean) {
+    const waiting = this.waiting;
+    this.waiting = [];
+    for (const resolve of waiting) resolve();
+    if (!said) return;
+    this.options().onSettle?.();
+    this.group?.rested();
   }
 
   private idOf(value: Value): string {
@@ -243,7 +383,7 @@ export class Engine {
 
   /** A character as plain text, as it stands in a value at rest (a node is a cell from the start). */
   private plain(cell: Cell): CellState {
-    const state: CellState = { ...cell, gone: false, element: null, sizer: null, window: null, strip: null, measurer: null, symbols: [cell.symbol], symbol: cell.symbol, next: null, turn: null, widen: null, width: NaN, target: 0 };
+    const state: CellState = { ...cell, gone: false, element: null, sizer: null, window: null, strip: null, kind: null, across: 0, measurer: null, symbols: [cell.symbol], symbol: cell.symbol, next: null, turn: null, widen: null, width: NaN, target: 0 };
     if (cell.symbol.startsWith(NODE)) this.cellOf(state);
     return state;
   }
@@ -326,6 +466,7 @@ export class Engine {
     const after = this.next;
     const option = this.options().way ?? "auto";
     this.way = option !== "auto" ? option : before.startsWith(NODE) || after.startsWith(NODE) ? "up" : wayOf(before, after);
+    this.trend = before.startsWith(NODE) || after.startsWith(NODE) ? null : trendOf(before, after);
     const cells = this.cells;
     // In order: a cell already in the line stays where it is, a new one goes in before the next.
     let at = 0;
@@ -379,16 +520,36 @@ export class Engine {
     }
   }
 
-  /** Writes again: every changing cell turned, and widened, on its spring. */
-  animate() {
+  /** How many of its cells start turning now, from still: the ones a stagger orders. */
+  fresh() {
+    return this.order.filter((cell) => cell.next !== null && !cell.turn && !cell.widen).length;
+  }
+
+  /**
+   * Writes again: every changing cell turned, and widened, on its spring; a cell turning from still
+   * after as many steps as its rank (its group's, or its own from `staggerFrom`).
+   */
+  animate(ranks?: number[], step?: number) {
     const options = this.options();
     const reduced = (options.reducedMotion ?? prefersReducedMotion()) || !(this.em > 0) || !(this.line > 0);
     const spring: Spring = { duration: options.duration ?? 0.6, bounce: options.bounce ?? 0 };
     // A reel's symbols are characters as a value's are: "♥️" is one.
     const reels = (options.reels ?? [DIGITS]).map((reel) => graphemesOf(reel));
+    let look = options.look ?? "slide";
+    let direction = options.direction ?? "up";
+    let effects = options.effects ?? [];
+    if ((look !== "slide" || direction !== "up" || effects.length) && !posesWork()) [look, direction, effects] = ["slide", "up", []];
     const changing = this.order.filter((cell) => cell.next !== null);
-    const stagger = Math.min(options.stagger ?? 0.03, changing.length > 1 ? STAGGER_MOST / (changing.length - 1) : Infinity);
-    let resting = 0;
+    ranks ??= ranksOf(this.fresh(), options.staggerFrom ?? "start");
+    step ??= stepOf(options.stagger ?? 0.03, ranks);
+    let fresh = 0;
+    if (options.trend && this.trend) {
+      const colours = typeof options.trend === "object" ? { ...TREND, ...options.trend } : TREND;
+      const tint = colours[this.trend];
+      // Held a moment, then back to its own colour: the last keyframe left out is the element's own.
+      this.tint?.cancel();
+      this.tint = this.visual.animate([{ color: tint }, { color: tint, offset: 0.15, easing: "ease-out" }], { duration: TREND_SECONDS * 1000 });
+    }
     for (const cell of changing) {
       const next = cell.next!;
       cell.next = null;
@@ -404,8 +565,8 @@ export class Engine {
         continue;
       }
       const moving = !!(cell.turn || cell.widen);
-      const delay = moving ? 0 : resting++ * stagger;
-      this.turn(cell, spring, reels, delay);
+      const delay = moving ? 0 : (ranks[fresh++] ?? 0) * step;
+      this.turn(cell, spring, reels, delay, look, direction, effects, Math.max(width.value, cell.width));
       // Widths all at once, on one curve: the value's width then moves one way only, where widths
       // staggered as the turns are made it grow then shrink, and a centred word shook.
       this.widen(cell, width, spring, 0);
@@ -414,40 +575,82 @@ export class Engine {
     this.settle();
   }
 
-  private turn(cell: CellState, spring: Spring, reels: string[][], delay: number) {
+  private turn(cell: CellState, spring: Spring, reels: string[][], delay: number, look: Look, direction: Direction, effects: readonly Effect[], wide: number) {
     // Still, a cell's strip is the one symbol it shows.
     const now = cell.turn ? where(cell.turn) : { value: 0, velocity: 0 };
     const at = Math.max(0, now.value);
-    cell.turn?.animation.cancel();
+    stop(cell.turn);
     const shown = cell.symbols[Math.min(cell.symbols.length - 1, Math.round(at))];
     const reel = reels.find((symbols) => symbols.includes(shown) && symbols.includes(cell.symbol)) ?? null;
-    const turn = turnOf({ symbols: cell.symbols, at }, cell.symbol, this.way, reel, !cell.digit);
+    // Every symbol on a reel turns the value's way, never the shorter way: a word's letters going
+    // some forward and some back read as a muddle, where a split-flap board's all go one way.
+    const turn = turnOf({ symbols: cell.symbols, at }, cell.symbol, this.way, reel, false);
+    // The strip of old, flat and upward, moved by `top`; any other look posed from one value.
+    const strip = look === "slide" && direction === "up" && !effects.length;
+    const across = direction === "left" || direction === "right";
+    const kind = `${look} ${direction} ${effects.join(" ")}`;
+    if (cell.window && cell.kind !== kind) {
+      cell.window.remove();
+      cell.window = cell.strip = null;
+    }
     if (!cell.window) {
-      cell.window = span(WINDOW);
-      cell.strip = span(STRIP);
-      cell.window.append(cell.strip);
+      cell.window = span(strip ? WINDOW : across ? ACROSS : WINDOW);
+      cell.kind = kind;
+      // Going across, symbols are a cell and its fade apart, the wider of where it's going and coming from.
+      cell.across = Math.max(wide, 0.5) + 2 * FADE;
+      if (strip) {
+        cell.strip = span(STRIP);
+        cell.window.append(cell.strip);
+      }
       cell.element!.append(cell.window);
       cell.sizer!.style.visibility = "hidden";
     }
-    // The strip's symbols, a block a step tall each, each centred by flex: `text-align` centres
-    // text alone, and a page's CSS often makes an icon a block (Tailwind does), which then stood at
-    // the window's left edge, half an em off, until the turn ended.
-    const step = this.line + GAP;
-    cell.strip!.replaceChildren(
-      ...turn.symbols.map((symbol) => {
-        const item = span(`display:flex;justify-content:center;align-items:flex-start;height:${step.toFixed(4)}em;white-space:pre`);
-        this.fill(item, symbol);
-        return item;
-      }),
-    );
+    const step = across ? cell.across : this.line + GAP;
+    if (strip) {
+      // The strip's symbols, a block a step tall each, each centred by flex: `text-align` centres
+      // text alone, and a page's CSS often makes an icon a block (Tailwind does), which then stood at
+      // the window's left edge, half an em off, until the turn ended.
+      cell.strip!.replaceChildren(
+        ...turn.symbols.map((symbol) => {
+          const item = span(`display:flex;justify-content:center;align-items:flex-start;height:${step.toFixed(4)}em;white-space:pre`);
+          this.fill(item, symbol);
+          return item;
+        }),
+      );
+    } else {
+      // Each symbol where a strip's rests, `--p` steps past it, posed by the look: one style for all.
+      const pose = cssOf(poseOf(look, direction, step, this.line, effects));
+      const deep = isDeep(look);
+      if (deep) cell.window.style.perspective = `${(EYE * step).toFixed(4)}em`;
+      const top = across ? 2 * FADE : FADE;
+      const style = `${POSED};top:${top}em;height:${this.line.toFixed(4)}em;transform:${pose.transform}${pose.opacity ? `;opacity:${pose.opacity}` : ""}${pose.filter ? `;filter:${pose.filter}` : ""}`;
+      cell.window.replaceChildren(
+        ...turn.symbols.map((symbol, index) => {
+          const item = span(style);
+          item.style.setProperty("--p", `calc(var(${VALUE}) - ${index})`);
+          this.fill(item, symbol);
+          return item;
+        }),
+      );
+    }
     cell.symbols = turn.symbols;
     const velocity = now.velocity + pushOf(spring, turn.from, turn.to);
     const frames = springFrames(spring, turn.from, turn.to, velocity, WITHIN);
-    // Moved by `top`, drawn in the page as the text beside it is: a transform put the strip on a
-    // layer of its own, which the browser places on whole device pixels, so a letter turning stood
-    // up to a pixel off the text and jumped as it was handed back.
-    const animation = play(cell.strip!, frames, (value) => ({ top: `${(FADE - value * step).toFixed(4)}em` }), delay);
+    // Moved by `top`, or posed from a value on the main thread, drawn in the page as the text beside
+    // it is: a transform animation put the strip on a layer of its own, which the browser places on
+    // whole device pixels, so a letter turning stood up to a pixel off the text and jumped as it was
+    // handed back.
+    const animation = strip
+      ? play(cell.strip!, frames, (value) => ({ top: `${(FADE - value * step).toFixed(4)}em` }), delay)
+      : play(cell.window!, frames, (value) => ({ [VALUE]: value.toFixed(5) }), delay);
     const motion: Motion = { animation, from: turn.from, to: turn.to, velocity, delay, spring, ended: false };
+    if (!strip && effects.includes("motion")) {
+      // Its speed beside its value, frame by frame, for `motion` to blur by.
+      const speeds = frames.values.map((_, k) => Math.abs(springAt(spring, turn.from, turn.to, velocity, k / RATE).velocity));
+      // Still while it waits its turn in a stagger, and still once it lands.
+      speeds[0] = speeds[speeds.length - 1] = 0;
+      motion.also = play(cell.window!, { values: speeds, duration: frames.duration }, (value) => ({ [SPEED]: value.toFixed(3) }), delay);
+    }
     cell.turn = motion;
     animation.onfinish = () => {
       motion.ended = true;
@@ -471,11 +674,12 @@ export class Engine {
 
   /** Under reduced motion: no turning, the new symbol faded in where it stands. */
   private fade(cell: CellState) {
-    cell.turn?.animation.cancel();
+    stop(cell.turn);
     cell.widen?.animation.cancel();
     cell.turn = cell.widen = null;
     cell.window?.remove();
     cell.window = cell.strip = null;
+    cell.kind = null;
     cell.element!.style.width = "";
     cell.sizer!.style.visibility = "";
     cell.symbols = [cell.symbol];
@@ -505,6 +709,7 @@ export class Engine {
     } else {
       cell.window?.remove();
       cell.window = cell.strip = null;
+      cell.kind = null;
       if (cell.sizer) cell.sizer.style.visibility = "";
       cell.symbols = [cell.symbol];
     }
@@ -516,5 +721,6 @@ export class Engine {
     if (!this.cells || queue.has(this)) return;
     if (this.order.some((cell) => cell.turn || cell.widen)) return;
     this.rest();
+    this.ended(true);
   }
 }

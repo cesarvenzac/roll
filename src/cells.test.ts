@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { cellsBetween, cellsOf, graphemesOf, wayOf } from "./cells.ts";
+import { cellsBetween, cellsOf, graphemesOf, trendOf, wayOf } from "./cells.ts";
 
 /** What's drawn as `before` becomes `after`, a cell a string: "+1" comes in, "[1]" goes, "1" stays (and turns). */
 const drawn = (before: string, after: string) => cellsBetween(before, after).map(({ symbol, gone, fresh }) => (gone ? `[${symbol}]` : fresh ? `+${symbol}` : symbol));
@@ -128,5 +128,14 @@ describe("wayOf", () => {
     expect(wayOf("", "5")).toBe("up");
     expect(wayOf("7", "7")).toBe("up");
     expect(wayOf("Saving", "Saved")).toBe("up");
+  });
+});
+
+describe("trendOf", () => {
+  it("says which way the numbers went, and nothing when none did", () => {
+    expect(trendOf("€8", "€6.67")).toBe("down");
+    expect(trendOf("9:59", "10:00")).toBe("up");
+    expect(trendOf("Saving", "Saved")).toBeNull();
+    expect(trendOf("3 left", "3 to go")).toBeNull();
   });
 });

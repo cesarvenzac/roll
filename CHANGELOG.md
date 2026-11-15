@@ -1,5 +1,20 @@
 # Changelog
 
+## 1.0.0
+
+- Looks and directions. `look` turns a symbol on a slot machine's drum or a turning cube, seen in perspective, rolls it along like a wheel (`circle`), tips it over its edge (`square`) or swaps it in place (`swap`, a crossfade); `slide`, the flat strip, stays the default. `direction` sends it `up` (the default), `down`, `left` or `right` as the value turns forward, and counting down runs it the other way. Going across, what leaves stays inside its own cell.
+- Effects. `effects` lays `fade`, `scale` and `blur` over any look, as far as a symbol has gone: faded out and in, shrunk to 60% and grown back (never from nothing), blurred and sharpened, in any mix.
+- Counting. `count` walks a number given as a number through every value between, on a spring of its own, each number rounded as the two ends are written before `format` writes it; sent somewhere new mid-count, it goes on at the speed it has. `format` writes a number given as a number, counting or not.
+- Trend. `trend` tints the value green as its numbers go up and red as they go down, then lets it fade back to its own colour; colours of your own as `{ up, down }`.
+- Motion blur. The `motion` effect blurs a symbol by how fast it goes: a long spin smears, then lands sharp.
+- Knowing when it's done. The roller's `settled` promise and the `onSettle` option say when it's at rest on its value, its count included.
+- `staggerFrom`: a change's characters start from the `start`, the `end` or the `center`.
+- Groups. `rollGroup()` (React's `<RollGroup>`) moves several rollers as one: a change to several staggers across them all in the page's order, and the group settles together.
+- Everywhere. `@cesarvenzac/roll/element` defines `<roll-text>`, its options attributes; `@cesarvenzac/roll/svelte` is an action and `@cesarvenzac/roll/vue` a directive. None needs anything else installed.
+- Letters on a reel turn the value's way, forward unless `way` says otherwise, as a split-flap board's flaps do. They took the shorter way round, so a word's letters went some forward and some back.
+- An element is drawn by a server as the engine will draw it, in an inline block: in a plain span, an icon the page's CSS makes a block (Tailwind's SVGs) broke out of its line and stood taller until the page was taken up.
+- Each look is geometry written once: the browser works it out every frame from one sprung value, through CSS's `sin()`, `cos()` and `round()`, and the tests evaluate the same expressions. Where the browser can't (before Chrome 125, Safari 16.4, Firefox 128), every look slides up, without effects.
+
 ## 0.1.3
 
 - An icon turns where it stands again. 0.1.2 widened the strip a symbol turns on, and a node a page's CSS makes a block (Tailwind makes every SVG one) stood at its left edge, half an em off, until the turn ended. Each symbol on a strip is now centred by flex, whatever it is.

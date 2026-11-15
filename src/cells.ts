@@ -159,11 +159,19 @@ function compare(a: ReturnType<typeof sizeOf>, b: ReturnType<typeof sizeOf>) {
  * "10:00" up, "3/12" to "4/12" up, "−3°" to "−5°" down. Up when it can't be told.
  */
 export function wayOf(before: string, after: string): Way {
+  return trendOf(before, after) ?? "up";
+}
+
+/**
+ * Which way a value's numbers went, or null when none of them did (no numbers, or the same ones):
+ * what `trend` tints a change by, where `wayOf` must pick a way to turn even then.
+ */
+export function trendOf(before: string, after: string): Way | null {
   const from = [...before.matchAll(NUMBER)].map((found) => sizeOf(before, found));
   const to = [...after.matchAll(NUMBER)].map((found) => sizeOf(after, found));
   for (let k = 0; k < Math.min(from.length, to.length); k++) {
     const order = compare(to[k], from[k]);
     if (order !== 0) return order < 0 ? "down" : "up";
   }
-  return "up";
+  return null;
 }

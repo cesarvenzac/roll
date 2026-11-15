@@ -29,7 +29,8 @@ describe("Roll on a server", () => {
   it("draws an element as React renders it, named by its label", () => {
     const icon = createElement("svg", { viewBox: "0 0 24 24", width: 16, height: 16 }, createElement("path", { d: "M20 6 9 17l-5-5" }));
     const markup = render({ value: icon, label: "Copied" });
-    expect(markup).toContain(`<span aria-hidden="true"><svg viewBox="0 0 24 24" width="16" height="16"><path d="M20 6 9 17l-5-5"></path></svg></span>`);
+    // Set as the visual is, so it lays out as the engine's copy will once the page is taken up.
+    expect(markup).toContain(`<span aria-hidden="true" style="display:inline-block;white-space:nowrap;font-kerning:none;font-variant-ligatures:none"><svg viewBox="0 0 24 24" width="16" height="16"><path d="M20 6 9 17l-5-5"></path></svg></span>`);
     expect(markup).toMatch(/>Copied<\/span><\/span>$/);
   });
 });
