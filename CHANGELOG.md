@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.3
+
+- An icon turns where it stands again. 0.1.2 widened the strip a symbol turns on, and a node a page's CSS makes a block (Tailwind makes every SVG one) stood at its left edge, half an em off, until the turn ended. Each symbol on a strip is now centred by flex, whatever it is.
+
 ## 0.1.2
 
 - Smoother turns, with nothing shaking. Widths now ease all at once on one curve: staggered like the turns, a word's width grew then shrank, and a centred word wobbled as "Saving" became "Saved". A turning strip moves by `top` rather than a transform, so its letter is drawn in the page as the text beside it is, where a layer of its own put it on whole device pixels and it jumped as it was handed back.

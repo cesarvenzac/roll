@@ -429,11 +429,13 @@ export class Engine {
       cell.element!.append(cell.window);
       cell.sizer!.style.visibility = "hidden";
     }
-    // The strip's symbols, a block a step tall each.
+    // The strip's symbols, a block a step tall each, each centred by flex: `text-align` centres
+    // text alone, and a page's CSS often makes an icon a block (Tailwind does), which then stood at
+    // the window's left edge, half an em off, until the turn ended.
     const step = this.line + GAP;
     cell.strip!.replaceChildren(
       ...turn.symbols.map((symbol) => {
-        const item = span(`display:block;height:${step.toFixed(4)}em;white-space:pre`);
+        const item = span(`display:flex;justify-content:center;align-items:flex-start;height:${step.toFixed(4)}em;white-space:pre`);
         this.fill(item, symbol);
         return item;
       }),
