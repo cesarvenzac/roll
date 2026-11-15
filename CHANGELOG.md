@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.1
+
+- A digit now lands exactly where the text draws it. A turning strip was one line of text a step tall, and at some sizes the browser rounded its leading differently from the text's, so a digit settled half a pixel off and moved by that much as it went back to plain text. Each symbol on a strip is now a block a step tall, its line the text's own height.
+
 ## 0.1.0
 
 The first version: the rolling numbers of Brume, as a library, and more than numbers.

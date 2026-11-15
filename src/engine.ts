@@ -68,13 +68,12 @@ const STAGGER_MOST = 0.24;
 
 const CELL = "display:inline-block;position:relative;white-space:pre";
 const WINDOW = `position:absolute;top:-${FADE}em;bottom:-${FADE}em;left:-${SIDE}em;right:-${SIDE}em;overflow:hidden;pointer-events:none;mask-image:linear-gradient(transparent,#000 ${FADE}em,#000 calc(100% - ${FADE}em),transparent);-webkit-mask-image:linear-gradient(transparent,#000 ${FADE}em,#000 calc(100% - ${FADE}em),transparent)`;
-/** A strip of nodes: a block a symbol, each a step tall. */
-const STRIP = `position:absolute;top:${FADE}em;left:${SIDE}em;right:${SIDE}em;display:flex;flex-direction:column;align-items:center`;
 /**
- * A strip of text: one text node, a line a symbol, each line a step tall. A line's glyphs sit in
- * its middle, half the gap lower than in a line of their own: the strip starts that much higher.
+ * A strip: a block a symbol, each a step tall, its symbol on a line of the text's own height at its
+ * top, so it's drawn where the text draws it to the pixel, however the browser rounds a line's
+ * leading (one line of text a step tall would put it half a pixel off at some sizes).
  */
-const TEXT_STRIP = `position:absolute;top:${FADE - GAP / 2}em;left:${SIDE}em;right:${SIDE}em;white-space:pre;text-align:center`;
+const STRIP = `position:absolute;top:${FADE}em;left:${SIDE}em;right:${SIDE}em;text-align:center`;
 /** Measures the next symbol beside the one shown, taking no room. */
 const MEASURER = "position:absolute;top:0;left:0;visibility:hidden;white-space:pre";
 const RULER = "position:absolute;top:0;left:0;width:0;height:0;overflow:hidden;visibility:hidden";
@@ -376,26 +375,20 @@ export class Engine {
     const turn = turnOf({ symbols: cell.symbols, at }, cell.symbol, this.way, reel, !cell.digit);
     if (!cell.window) {
       cell.window = span(WINDOW);
-      cell.strip = document.createElement("span");
+      cell.strip = span(STRIP);
       cell.window.append(cell.strip);
       cell.element!.append(cell.window);
       cell.sizer!.style.visibility = "hidden";
     }
-    // The strip's symbols, a step each: lines of one text node, or a block a node.
+    // The strip's symbols, a block a step tall each.
     const step = this.line + GAP;
-    if (turn.symbols.some((symbol) => symbol.startsWith(NODE))) {
-      cell.strip!.style.cssText = STRIP;
-      cell.strip!.replaceChildren(
-        ...turn.symbols.map((symbol) => {
-          const item = span(`display:block;height:${step}em`);
-          this.fill(item, symbol);
-          return item;
-        }),
-      );
-    } else {
-      cell.strip!.style.cssText = `${TEXT_STRIP};line-height:${step}em`;
-      cell.strip!.textContent = turn.symbols.join("\n");
-    }
+    cell.strip!.replaceChildren(
+      ...turn.symbols.map((symbol) => {
+        const item = span(`display:block;height:${step.toFixed(4)}em;white-space:pre`);
+        this.fill(item, symbol);
+        return item;
+      }),
+    );
     cell.symbols = turn.symbols;
     const velocity = now.velocity + pushOf(spring, turn.from, turn.to);
     const frames = springFrames(spring, turn.from, turn.to, velocity, WITHIN);

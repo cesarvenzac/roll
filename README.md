@@ -116,8 +116,8 @@ gives every digit one width, if that's what you want.
 ## Cost
 
 About 5 kB minified and gzipped, the React entry included, with no dependencies. At rest a value
-is one text node. Starting a turn takes about 1.5 ms for a number, 10 ms for twenty changing at
-once and 85 ms for two hundred, measured in headless Chromium on one core of a 2.1 GHz server;
+is one text node. Starting a turn takes about 2 ms for a number, 12 ms for twenty changing at
+once and 80 ms for two hundred, measured in headless Chromium on one core of a 2.1 GHz server;
 the turn itself plays on the compositor (a transform), apart from the width.
 
 ## Browsers
