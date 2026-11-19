@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.1.2
+
+- The README's loop is sharper: moving shapes no longer leave pixels behind them.
+
 ## 1.1.1
 
 - Turns land evenly. Text moved by less than a pixel a frame moves a whole pixel at a time, so a spring's long tail came in a pixel, a wait, a pixel and a longer wait, the last pixel held for a tenth of a second: a stutter just as it landed. A turn now slows as before until it's moving a pixel a frame, then comes the rest of the way at that pace, a pixel every frame, and rests a little sooner.

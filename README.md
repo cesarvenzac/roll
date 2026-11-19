@@ -4,7 +4,7 @@ Text that rolls as it changes. Digits turn as an odometer's do and keep their pl
 signs and icons roll over; everything moves on a spring that carries on when it's interrupted.
 Give it the value as you'd write it, formatted however you like, and it works out the rest.
 
-[![A price, a count, a clock, a word, an icon and a day, each rolling to its next value: €8 to €6.67, 999 to 1,000, 9:59 to 10:00, Saving to Saved, a copy icon to a tick, Wed to Thu](https://cesarvenzac.com/media/37d79baf-d757-4816-9f5a-5dea265877c9.webp)](https://cesarvenzac.com/roll)
+[![A price, a count, a clock, a word, an icon and a day, each rolling to its next value: €8 to €6.67, 999 to 1,000, 9:59 to 10:00, Saving to Saved, a copy icon to a tick, Wed to Thu](https://cesarvenzac.com/media/2f1f88e3-b315-48a3-879e-8cacab3d22e3.webp)](https://cesarvenzac.com/roll)
 
 The docs, with live examples, are at [cesarvenzac.com/roll](https://cesarvenzac.com/roll).
 
