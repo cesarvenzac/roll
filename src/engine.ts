@@ -9,7 +9,7 @@
 
 import { between, type Cell, cellsOf, graphemesOf, trendOf, type Way, wayOf } from "./cells.ts";
 import { cssOf, type Direction, type Effect, isDeep, type Look, poseOf, SPEED } from "./looks.ts";
-import { pushOf, RATE, type Spring, springAt, springFrames } from "./spring.ts";
+import { type Landing, pathAt, pushOf, RATE, type Spring, springFrames } from "./spring.ts";
 import { ranksOf, type StaggerFrom, stepOf } from "./stagger.ts";
 import { BLANK, turnOf } from "./turn.ts";
 
@@ -92,6 +92,11 @@ const GAP = 0.3;
 const SIDE = 0.5;
 /** Close enough, in steps of the strip and in em of width. */
 const WITHIN = 0.002;
+/**
+ * The least a turn moves a frame as it lands, in CSS pixels: text moved by less goes in whole
+ * pixels, a pixel and a pause, and a spring's tail read as a stutter (`springFrames`' `least`).
+ */
+const LEAST = 1;
 /** Seconds a fade takes under reduced motion. */
 const FADE_SECONDS = 0.18;
 
@@ -119,7 +124,7 @@ const EYE = 4;
 const MEASURER = "position:absolute;top:0;left:0;visibility:hidden;white-space:pre";
 const RULER = "position:absolute;top:0;left:0;width:0;height:0;overflow:hidden;visibility:hidden";
 
-type Motion = { animation: Animation; from: number; to: number; velocity: number; delay: number; spring: Spring; ended: boolean; also?: Animation };
+type Motion = { animation: Animation; from: number; to: number; velocity: number; delay: number; spring: Spring; landing: Landing | null; ended: boolean; also?: Animation };
 
 /** Stops a motion, and what plays beside it. */
 function stop(motion: Motion | null) {
@@ -188,7 +193,7 @@ function where(motion: Motion) {
   const time = motion.animation.currentTime;
   const t = (typeof time === "number" ? time : Number(time ?? 0)) / 1000 - motion.delay;
   if (t < 0) return { value: motion.from, velocity: 0 };
-  return springAt(motion.spring, motion.from, motion.to, motion.velocity, t);
+  return pathAt(motion.spring, motion.from, motion.to, motion.velocity, motion.landing, t);
 }
 
 const made = new Map<string, HTMLSpanElement>();
@@ -635,7 +640,8 @@ export class Engine {
     }
     cell.symbols = turn.symbols;
     const velocity = now.velocity + pushOf(spring, turn.from, turn.to);
-    const frames = springFrames(spring, turn.from, turn.to, velocity, WITHIN);
+    // Never slower than a pixel a frame as it lands: `step` em a step, `em` pixels an em.
+    const frames = springFrames(spring, turn.from, turn.to, velocity, WITHIN, (LEAST * RATE) / (step * this.em));
     // Moved by `top`, or posed from a value on the main thread, drawn in the page as the text beside
     // it is: a transform animation put the strip on a layer of its own, which the browser places on
     // whole device pixels, so a letter turning stood up to a pixel off the text and jumped as it was
@@ -643,10 +649,10 @@ export class Engine {
     const animation = strip
       ? play(cell.strip!, frames, (value) => ({ top: `${(FADE - value * step).toFixed(4)}em` }), delay)
       : play(cell.window!, frames, (value) => ({ [VALUE]: value.toFixed(5) }), delay);
-    const motion: Motion = { animation, from: turn.from, to: turn.to, velocity, delay, spring, ended: false };
+    const motion: Motion = { animation, from: turn.from, to: turn.to, velocity, delay, spring, landing: frames.landing, ended: false };
     if (!strip && effects.includes("motion")) {
       // Its speed beside its value, frame by frame, for `motion` to blur by.
-      const speeds = frames.values.map((_, k) => Math.abs(springAt(spring, turn.from, turn.to, velocity, k / RATE).velocity));
+      const speeds = frames.values.map((_, k) => Math.abs(pathAt(spring, turn.from, turn.to, velocity, frames.landing, k / RATE).velocity));
       // Still while it waits its turn in a stagger, and still once it lands.
       speeds[0] = speeds[speeds.length - 1] = 0;
       motion.also = play(cell.window!, { values: speeds, duration: frames.duration }, (value) => ({ [SPEED]: value.toFixed(3) }), delay);
@@ -664,7 +670,7 @@ export class Engine {
     const velocity = now.velocity + pushOf(spring, now.value, cell.width);
     const frames = springFrames(spring, now.value, cell.width, velocity, WITHIN);
     const animation = play(cell.element!, frames, (value) => ({ width: `${Math.max(0, value).toFixed(6)}em` }), delay);
-    const motion: Motion = { animation, from: now.value, to: cell.width, velocity, delay, spring, ended: false };
+    const motion: Motion = { animation, from: now.value, to: cell.width, velocity, delay, spring, landing: frames.landing, ended: false };
     cell.widen = motion;
     animation.onfinish = () => {
       motion.ended = true;
@@ -685,7 +691,7 @@ export class Engine {
     cell.symbols = [cell.symbol];
     if (cell.gone) return this.done(cell);
     const animation = cell.sizer!.animate([{ opacity: 0 }, { opacity: 1 }], { duration: FADE_SECONDS * 1000, easing: "cubic-bezier(0.23, 1, 0.32, 1)" });
-    const motion: Motion = { animation, from: 0, to: 0, velocity: 0, delay: 0, spring: { duration: 0, bounce: 0 }, ended: false };
+    const motion: Motion = { animation, from: 0, to: 0, velocity: 0, delay: 0, spring: { duration: 0, bounce: 0 }, landing: null, ended: false };
     cell.turn = motion;
     animation.onfinish = () => {
       motion.ended = true;
