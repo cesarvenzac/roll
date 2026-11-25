@@ -35,15 +35,16 @@ export type Options = {
   reducedMotion?: boolean;
   /**
    * How a symbol turns: `slide` (the default) on a flat strip, `drum` on a turning drum and
-   * `cube` on a turning box, seen in perspective, `circle` rolling like a wheel and `square`
-   * tipping over its edge.
+   * `cube` on a turning box, seen in perspective, `circle` rolling like a wheel, `square`
+   * tipping over its edge, and `swap` in place, the old one giving way to the next.
    */
   look?: Look;
   /** Where a symbol goes as the value turns forward: `up` (the default), `down`, `left` or `right`. */
   direction?: Direction;
   /**
    * Laid over the look as a symbol leaves and comes, as far as it's gone: `fade`, `scale` (down,
-   * never to nothing) and `blur`, any of them together. None unless said.
+   * never to nothing) and `blur`, or `motion`, a blur by how fast it goes, any of them together.
+   * None unless said.
    */
   effects?: readonly Effect[];
   /** Where a change's characters start from: the `start` (the default), the `end` or the `center`. */
@@ -258,7 +259,7 @@ function flush() {
 
 /**
  * Rollers that move as one: a change to several in the same moment staggers across them all, in
- * the page's order, and `settled` waits for every one of them.
+ * the page's order, and `settled` waits for every one of them, counts included.
  */
 export class Group {
   readonly members = new Set<Engine>();
@@ -267,15 +268,26 @@ export class Group {
   listen(onSettle: (() => void) | undefined) {
     this.onSettle = onSettle;
   }
-  /** Resolves once every roller in it is at rest. */
+  /** Resolves once every roller in it is at rest, its count, if any, done too. */
   get settled(): Promise<void> {
-    return Promise.all([...this.members].map((engine) => engine.settled)).then(() => undefined);
+    return Promise.all([...this.members].map((engine) => (engine.waitsFor?.idle() ?? Promise.resolve()).then(() => engine.settled))).then(() => undefined);
   }
-  /** One of its rollers came to rest: if all have, it has. */
+  /** One of its rollers came to rest, or its count ended: if all are at rest, it is. */
   rested() {
-    if ([...this.members].every((engine) => engine.resting)) this.onSettle?.();
+    if ([...this.members].every((engine) => engine.resting && !engine.waitsFor?.busy())) this.onSettle?.();
   }
 }
+
+/**
+ * What else a roller waits for before it's at rest, as what drives it says: its count. A count
+ * slowing to its end can hold one number for a few frames, and the engine rests between them.
+ */
+export type Waiting = {
+  /** Whether it's still going. */
+  busy(): boolean;
+  /** Resolves once it isn't. */
+  idle(): Promise<void>;
+};
 
 export class Engine {
   private shown: string;
@@ -294,6 +306,8 @@ export class Engine {
   /** Waiting for it to come to rest. */
   private waiting: (() => void)[] = [];
   readonly group: Group | null;
+  /** What else its group waits for: set by the driver, for its count. */
+  waitsFor: Waiting | null = null;
 
   constructor(
     readonly visual: HTMLElement,

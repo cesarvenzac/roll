@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.1.3
+
+- A group waits for its rollers' counts. Its `settled` and `onSettle` waited for each roller's turns but not for its count, and a count slowing to its end holds one number for a few frames, its turns coming to rest between them: the group settled mid-count, then again at each number after. Now it settles once, when every count is done and its last number has landed, as a roller on its own does.
+- The README says what React's `<Roll>` and `<roll-text>` take. `<Roll>` takes every option but `group`: inside a `<RollGroup>`, it joins that group. `<roll-text>` takes `format`, `group` and `onSettle` through its `options` property alone, never as attributes. And a roller joins the group it's made with, not one given later.
+- Hovering `look` and `effects` in an editor names `swap` and `motion` too.
+
 ## 1.1.2
 
 - The README's loop is sharper: moving shapes no longer leave pixels behind them.

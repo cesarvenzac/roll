@@ -120,7 +120,7 @@ from one sprung value (CSS's `sin()`, `cos()` and `round()`), so it's as smooth 
 - **`staggerFrom`** starts a change's characters from the `start`, the `end` or the `center`.
 - **Groups** move several rollers as one. Give each the same `rollGroup()` (in React, wrap them in
   `<RollGroup>`): a change to several in the same moment staggers across them all in the page's
-  order, and the group's `settled` and `onSettle` wait for every one.
+  order, and the group's `settled` and `onSettle` wait for every one, counts included.
 
 ```ts
 const row = rollGroup({ onSettle: () => console.log("all landed") });
@@ -165,23 +165,27 @@ Makes `element` show `value`, replacing what was in it, and returns a roller:
 ### `rollGroup({ onSettle? })`
 
 A group to give rollers as `group`: they stagger as one value and settle together. Its
-`settled` resolves once every one of them is at rest.
+`settled` resolves once every one of them is at rest, counts included, and `onSettle` is called
+each time they all are. A roller joins the group it's made with: one given later, to `set`, is
+passed over.
 
 ### `<Roll value label? {...options} {...spanProps} />`
 
 `@cesarvenzac/roll/react`. A `<span>` showing `value`, text, a number or an element, rolling to
 each new one. Its own props (`className`, `style`, `id`…) go on the `<span>`. An element rolls
 over as one and should be still: what rolls is a copy. React 18 or later, as an optional peer
-dependency; it's a client component. `<RollGroup onSettle?>` groups every `Roll` inside it.
+dependency; it's a client component. It takes every option but `group`: a `Roll` inside a
+`<RollGroup onSettle?>` joins that group instead.
 
 ### `<roll-text>`
 
 `@cesarvenzac/roll/element` defines it when imported. Its options are attributes (`look`,
 `direction`, `effects="fade blur"`, `stagger-from`, `trend`, `count`, `tabular`, `duration`, `bounce`,
 `stagger`, `way`, `reels`, `reduced-motion`, `label`), its value an attribute or the `value`
-property (a number counts), and `options` a property for what an attribute can't say (`format`,
-`group`, `onSettle`). Its `settled` is the roller's. Text written inside it before it's defined (a
-server's) is taken up as it is.
+property (a number counts), and `options` a property for what an attribute can't say: `format`,
+`group` and `onSettle` come through it alone, never as attributes. Set `options` before it's in the
+page for it to join a group. Its `settled` is the roller's. Text written inside it before it's
+defined (a server's) is taken up as it is.
 
 ### Svelte and Vue
 
@@ -208,7 +212,7 @@ directive an element with nothing inside for Vue to keep.
 | `format`        | `String`           | How a number given as a number is written.                                    |
 | `tabular`       | while counting     | Tabular figures, every digit one width: on with `count`, else the font's own. |
 | `onSettle`      |                    | Called each time it comes to rest on a new value.                             |
-| `group`         |                    | A `rollGroup()` it moves with.                                                |
+| `group`         |                    | A `rollGroup()` it moves with. In React, the `<RollGroup>` it's inside.       |
 | `label`         | the value's words  | What assistive tech reads. A node's `aria-label` unless said.                 |
 
 A reel is a string of symbols in order, going round: `DIGITS` (`"0123456789"`), `LOWERCASE`,

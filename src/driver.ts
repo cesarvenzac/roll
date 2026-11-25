@@ -35,6 +35,7 @@ export class Driver {
   readonly engine: Engine;
   private counter: Counter | null = null;
   private last: Value;
+  private destroyed = false;
 
   constructor(
     visual: HTMLElement,
@@ -46,6 +47,8 @@ export class Driver {
     // The engine says it's at rest only when the count is too: a count slowing to its end can hold one
     // number for a few frames, and the engine would rest between them.
     this.engine = new Engine(visual, shownOf(value, options().format), () => ({ ...this.options(), onSettle: () => this.rested() }));
+    // Its group waits for the count too, which the engine knows nothing of.
+    this.engine.waitsFor = { busy: () => !!this.counter?.counting, idle: () => this.counter?.idle() ?? Promise.resolve() };
   }
 
   get settled(): Promise<void> {
@@ -72,7 +75,7 @@ export class Driver {
       const written = options.format ?? plainFormat(decimals);
       const format = (n: number) => written(roundTo(n, decimals));
       const still = options.reducedMotion ?? prefersReducedMotion();
-      this.counter ??= new Counter(before, (text) => this.engine.set(text), () => this.rested());
+      this.counter ??= new Counter(before, (text) => this.engine.set(text), () => this.counted());
       return this.counter.to(value, seconds, format, still);
     }
     // The new value first, then the count let go: told it's done, the engine is already changing.
@@ -86,7 +89,19 @@ export class Driver {
     this.options().onSettle?.();
   }
 
+  /**
+   * The count is done: at rest if the engine is too, and its group asked again, since the engine
+   * may have come to rest already and won't again. Only from here: the engine's own rest asks the
+   * group itself, and asked from both the group would hear it twice.
+   */
+  private counted() {
+    this.rested();
+    // Destroyed, it's leaving its group, and says nothing to it, as the engine doesn't.
+    if (!this.destroyed) this.engine.group?.rested();
+  }
+
   destroy() {
+    this.destroyed = true;
     this.counter?.stop();
     this.engine.destroy();
   }
